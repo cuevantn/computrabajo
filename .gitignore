@@ -1,0 +1,44 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Environments
+.env
+.venv
+env/
+venv/
+
+# Flask stuff
+instance/
+.webassets-cache
+
+# IPython Notebook
+.ipynb_checkpoints
+
+# PyInstaller
+#  Usually these files are written by a python script from a template
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+*.manifest
+*.spec
+
+# Various temp files
+*.tmp
+*.bak
+*.swp
+*.save
+
+# Logs
+*.log
+
+# Dist and build output
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# .mypy_cache
+.mypy_cache/
