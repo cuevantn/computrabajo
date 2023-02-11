@@ -1,73 +1,58 @@
 import requests
+
 from bs4 import BeautifulSoup
-import json
-
-from constants import URL, PAYLOAD, HEADERS, KEYWORDS,DATA_PATH,REVALIDATE_DATA_PATH
-from detail import getJobDetail
-from utils import checkLastPage, checkIsCivilEngineeringJob
-
-import os
-import csv
-
+from constants import URL, PAYLOAD, HEADERS,PAGE_START
+from utils import checkLastPage, checkIsCivilEngineeringJob,checkIsTraineeJob, checkIsAdHonoremJob
+from mainxata import dbClient
+from singlejob import checkIsOldJob, getDataFromCard
 
 def update_data():
-    page = 1
+    page = PAGE_START
+    while True:
+        url = URL + "?p=" + str(page)
+        response = requests.request("GET", url, headers=HEADERS, data=PAYLOAD)
+        soup = BeautifulSoup(response.content, "html.parser")
 
-    with open(REVALIDATE_DATA_PATH, 'w', newline='', encoding='utf-8') as csvfile:
-        fieldnames = ['id', 'title', 'published','detail', 'keywords', ]
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        isLastPage = checkLastPage(soup.text)
+        if isLastPage:
+            break
+        
+        job_elements = soup.find_all("article", class_="box_offer")
 
-        writer.writeheader()
-
-        while True:
-            url = URL + "?p=" + str(page)
-            response = requests.request("GET", url, headers=HEADERS, data=PAYLOAD)
-            soup = BeautifulSoup(response.content, "html.parser")
-
-            isLastPage = checkLastPage(soup.text)
-            if isLastPage:
-                break
+        for job_element in job_elements:
+            isOldJob = checkIsOldJob(job_element)
+            if isOldJob:
+                continue
             
-            job_elements = soup.find_all("article", class_="box_offer")
-
-            for job_element in job_elements:
-                id = job_element["data-id"]
-                title = job_element.find("h1").find("a").text
-                published = job_element.find("p", class_="fs13 fc_aux").text
-                detail = getJobDetail(id)
-
-                isCivilEnginneringJob = checkIsCivilEngineeringJob(detail)
-
-                if not isCivilEnginneringJob:
-                    continue
-
-                keywords = []
-
-                for key, value in KEYWORDS.items():
-                    for keyword in value:
-                        if keyword in detail:
-                            keywords.append(key)
-                            break
-                
-                keywords = "/".join(keywords)
-                
-
-                job = {
-                    "id": id,
-                    "title": title,
-                    "published": published,
-                    "detail": detail,
-                    "keywords": keywords
-                }
-
-                writer.writerow(job)
+            job = getDataFromCard(job_element)
             
-            print(f'Page {page} saved')
-            page += 1
+            title_lower = job["title"].lower()
+            detail_lower = job["detail"].lower()
 
-    
-    os.remove(DATA_PATH)
-    os.rename(REVALIDATE_DATA_PATH, DATA_PATH)
+            isCivilEnginneringJob = checkIsCivilEngineeringJob(title_lower, detail_lower)
+            if not isCivilEnginneringJob:
+                continue
 
-    with open(REVALIDATE_DATA_PATH, "w") as f:
-        pass
+            isTraineeJob = checkIsTraineeJob(title_lower, detail_lower)
+            if not isTraineeJob:
+                continue
+
+            id = job["id"]
+            del job["id"]
+            
+            record = dbClient.get_by_id('JobOffer', id=id)
+            if record is not None:
+                print(f'Job {id} already exists in database')
+                continue
+
+            isAdHonorem = checkIsAdHonoremJob(title_lower, detail_lower)
+            job["isAdHonorem"] = isAdHonorem
+
+            dbClient.create('JobOffer', id=id, record=job)
+
+            print(f'Job {id} added to database')
+        
+        print(f'Page {page} processed')
+        page += 1
+
+update_data()
